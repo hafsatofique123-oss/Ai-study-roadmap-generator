@@ -1,11 +1,37 @@
 import streamlit as st
 import os
+from typing import List
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from schemas import RoadmapResponse
 
-# Load environment variables for local testing
+# ==========================================
+# 1. Pydantic Schemas (Directly in app.py)
+# ==========================================
+class Resource(BaseModel):
+    title: str
+    type: str = Field(..., description="Book, Course, YouTube, Documentation, etc.")
+
+class Milestone(BaseModel):
+    phase_number: int
+    phase_title: str
+    estimated_time: str
+    key_concepts: List[str]
+    hands_on_project: str
+    recommended_resources: List[Resource]
+
+class RoadmapResponse(BaseModel):
+    title: str
+    summary: str
+    target_level: str
+    total_estimated_time: str
+    prerequisites: List[str]
+    milestones: List[Milestone]
+
+# ==========================================
+# 2. Streamlit Configuration & Security
+# ==========================================
 load_dotenv()
 
 st.set_page_config(
@@ -14,12 +40,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# Securely fetch API key from Secrets or Environment
+# Fetch API Key securely
 def get_gemini_api_key():
-    # 1. Check Streamlit Cloud Secrets (Live Deployment)
     if "GEMINI_API_KEY" in st.secrets:
         return st.secrets["GEMINI_API_KEY"]
-    # 2. Check Local .env File (Local Development)
     elif os.getenv("GEMINI_API_KEY"):
         return os.getenv("GEMINI_API_KEY")
     return None
@@ -27,23 +51,24 @@ def get_gemini_api_key():
 api_key = get_gemini_api_key()
 
 if not api_key:
-    st.error("⚠️ Gemini API Key config nahi hui! Deployment Settings / Secrets check karein.")
+    st.error("⚠️ Gemini API Key missing! Streamlit Cloud Secrets check karein.")
     st.stop()
 
-# Initialize Gemini Client background mein (Hidden from UI)
+# Initialize Gemini Client
 client = genai.Client(api_key=api_key)
 
+# ==========================================
+# 3. User Interface & Logic
+# ==========================================
 st.title("🗺️ AI Learning Roadmap Generator")
-st.caption("Enter your learning preferences to get a step-by-step roadmap.")
-
+st.caption("Enter your learning preferences to generate a custom roadmap.")
 st.divider()
 
-# Input Form
 with st.form("roadmap_form"):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        domain = st.text_input("Domain / Field", placeholder="e.g. Data Science, Web Dev")
+        domain = st.text_input("Domain / Field", placeholder="e.g. Data Science, DevOps")
     with col2:
         level = st.selectbox("Current Skill Level", ["Beginner", "Intermediate", "Advanced"])
     with col3:
@@ -53,11 +78,11 @@ with st.form("roadmap_form"):
 
 if submit_btn:
     if not domain.strip():
-        st.warning("Please enter a domain/field name!")
+        st.warning("Please enter a domain or field!")
     else:
-        with st.spinner("🤖 Designing curriculum..."):
+        with st.spinner("🤖 Generating curriculum..."):
             try:
-                prompt = f"Create a comprehensive roadmap for Domain: {domain}, Level: {level}, Duration: {time_frame}"
+                prompt = f"Create a structured learning roadmap for Domain: {domain}, Level: {level}, Duration: {time_frame}"
 
                 response = client.models.generate_content(
                     model='gemini-2.5-flash',
@@ -71,7 +96,7 @@ if submit_btn:
 
                 roadmap = RoadmapResponse.model_validate_json(response.text)
 
-                st.success("✅ Roadmap Generated!")
+                st.success("✅ Roadmap Generated Successfully!")
                 st.header(roadmap.title)
                 
                 c1, c2 = st.columns(2)
@@ -101,4 +126,4 @@ if submit_btn:
                             st.markdown(f"- **[{res.type}]** {res.title}")
 
             except Exception as e:
-                st.error(f"Error generating roadmap: {str(e)}")
+                st.error(f"Error: {str(e)}")
