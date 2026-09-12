@@ -56,7 +56,7 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # ==========================================
-# 3. UI Layout (Exact Screenshot Design)
+# 3. UI Layout
 # ==========================================
 st.title("🎓 AI Learning Roadmap Generator")
 st.caption("Create a personalized learning roadmap based on your field, skill level, and available time.")
@@ -64,9 +64,7 @@ st.caption("Create a personalized learning roadmap based on your field, skill le
 st.write("") 
 
 domain = st.text_input("📚 Domain / Field", placeholder="e.g. Machine Learning")
-
 level = st.selectbox("🎯 Skill Level", ["Beginner", "Intermediate", "Advanced"])
-
 time_frame = st.text_input("⏰ Time Available", placeholder="e.g. 8 weeks, 2 hours per day")
 
 st.write("") 
@@ -74,7 +72,7 @@ st.write("")
 submit_btn = st.button("🚀 Generate Roadmap", type="secondary")
 
 # ==========================================
-# 4. Processing with Multi-Model Fallback
+# 4. Processing with Latest Gemini 3.6 Model
 # ==========================================
 if submit_btn:
     if not domain.strip():
@@ -90,32 +88,18 @@ if submit_btn:
             Provide logical phases, key topics, a practical project, and helpful resources.
             """
 
-            # Fallback list of valid Gemini models
-            AVAILABLE_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash']
-            
-            response = None
-            last_error = None
+            try:
+                # Direct call with Google's mandated model
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=RoadmapResponse,
+                        temperature=0.3,
+                    ),
+                )
 
-            for model_name in AVAILABLE_MODELS:
-                try:
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=RoadmapResponse,
-                            temperature=0.3
-                        ),
-                    )
-                    if response:
-                        break
-                except Exception as err:
-                    last_error = err
-                    continue
-
-            if response is None:
-                st.error(f"Error connecting to AI Model: {str(last_error)}")
-            else:
                 roadmap = RoadmapResponse.model_validate_json(response.text)
 
                 # Output Display
@@ -147,3 +131,6 @@ if submit_btn:
                         st.markdown("**📚 Recommended Resources:**")
                         for res in m.recommended_resources:
                             st.markdown(f"- **[{res.type}]** {res.title}")
+
+            except Exception as e:
+                st.error(f"API Error: {str(e)}")
