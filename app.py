@@ -7,7 +7,7 @@ from google.genai import types
 from dotenv import load_dotenv
 
 # ==========================================
-# 1. Pydantic Schemas (Directly in app.py)
+# 1. Structured Data Schema
 # ==========================================
 class Resource(BaseModel):
     title: str
@@ -30,17 +30,16 @@ class RoadmapResponse(BaseModel):
     milestones: List[Milestone]
 
 # ==========================================
-# 2. Streamlit Configuration & Security
+# 2. Config & Security Setup
 # ==========================================
 load_dotenv()
 
 st.set_page_config(
     page_title="AI Learning Roadmap Generator",
-    page_icon="🗺️",
+    page_icon="🎓",
     layout="wide"
 )
 
-# Fetch API Key securely
 def get_gemini_api_key():
     if "GEMINI_API_KEY" in st.secrets:
         return st.secrets["GEMINI_API_KEY"]
@@ -54,36 +53,46 @@ if not api_key:
     st.error("⚠️ Gemini API Key missing! Streamlit Cloud Secrets check karein.")
     st.stop()
 
-# Initialize Gemini Client
 client = genai.Client(api_key=api_key)
 
 # ==========================================
-# 3. User Interface & Logic
+# 3. Exact UI Design matching Screenshot
 # ==========================================
-st.title("🗺️ AI Learning Roadmap Generator")
-st.caption("Enter your learning preferences to generate a custom roadmap.")
-st.divider()
+st.title("🎓 AI Learning Roadmap Generator")
+st.caption("Create a personalized learning roadmap based on your field, skill level, and available time.")
 
-with st.form("roadmap_form"):
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        domain = st.text_input("Domain / Field", placeholder="e.g. Data Science, DevOps")
-    with col2:
-        level = st.selectbox("Current Skill Level", ["Beginner", "Intermediate", "Advanced"])
-    with col3:
-        time_frame = st.text_input("Time Commitment", placeholder="e.g. 3 Months (10 hrs/week)")
-        
-    submit_btn = st.form_submit_button("🚀 Generate Roadmap", type="primary", use_container_width=True)
+st.write("") # Spacing
 
+# Inputs Stacked Vertically as shown in screenshot
+domain = st.text_input("📚 Domain / Field", placeholder="e.g. Machine Learning")
+
+level = st.selectbox("🎯 Skill Level", ["Beginner", "Intermediate", "Advanced"])
+
+time_frame = st.text_input("⏰ Time Available", placeholder="e.g. 8 weeks, 2 hours per day")
+
+st.write("") # Spacing
+
+submit_btn = st.button("🚀 Generate Roadmap", type="secondary")
+
+# ==========================================
+# 4. Processing & Execution
+# ==========================================
 if submit_btn:
     if not domain.strip():
         st.warning("Please enter a domain or field!")
     else:
-        with st.spinner("🤖 Generating curriculum..."):
+        with st.spinner("⚡ Designing your customized learning roadmap..."):
             try:
-                prompt = f"Create a structured learning roadmap for Domain: {domain}, Level: {level}, Duration: {time_frame}"
+                prompt = f"""
+                You are an expert curriculum planner. Create a step-by-step learning roadmap for:
+                - Domain/Field: {domain}
+                - Skill Level: {level}
+                - Time Commitment: {time_frame}
+                
+                Provide logical phases, key topics, a practical project, and helpful resources.
+                """
 
+                # Using stable Gemini API call
                 response = client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
@@ -96,34 +105,36 @@ if submit_btn:
 
                 roadmap = RoadmapResponse.model_validate_json(response.text)
 
-                st.success("✅ Roadmap Generated Successfully!")
+                # Output Display
+                st.divider()
+                st.success("🎉 Roadmap Generated Successfully!")
                 st.header(roadmap.title)
                 
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.metric(label="Skill Level", value=roadmap.target_level)
-                with c2:
-                    st.metric(label="Est. Total Time", value=roadmap.total_estimated_time)
+                col1, col2 = st.columns(2)
+                col1.metric(label="Skill Level Target", value=roadmap.target_level)
+                col2.metric(label="Total Estimated Time", value=roadmap.total_estimated_time)
 
                 st.info(f"**Overview:** {roadmap.summary}")
 
-                st.subheader("📋 Prerequisites")
-                st.write(", ".join([f"`{p}`" for p in roadmap.prerequisites]))
+                if roadmap.prerequisites:
+                    st.subheader("📋 Prerequisites")
+                    st.write(", ".join([f"`{p}`" for p in roadmap.prerequisites]))
 
                 st.divider()
-                st.subheader("🗺️ Detailed Modules & Steps")
+                st.subheader("🗺️ Learning Path Steps")
 
                 for m in roadmap.milestones:
                     with st.expander(f"Phase {m.phase_number}: {m.phase_title} ({m.estimated_time})", expanded=True):
-                        st.write("**Key Concepts:**")
+                        st.markdown("**🧠 Key Concepts & Topics to Master:**")
                         for concept in m.key_concepts:
                             st.markdown(f"- {concept}")
                         
-                        st.markdown(f"**🛠️ Project:** {m.hands_on_project}")
+                        st.markdown(f"**🛠️ Practical Project:** {m.hands_on_project}")
                         
-                        st.write("**📚 Resources:**")
+                        st.markdown("**📚 Recommended Resources:**")
                         for res in m.recommended_resources:
                             st.markdown(f"- **[{res.type}]** {res.title}")
 
             except Exception as e:
+                # Fallback for API model compatibility
                 st.error(f"Error: {str(e)}")
